@@ -236,7 +236,7 @@ void TerminalWebView::apply_pane_geometry()
     write_to_terminal("\x1b[2J"sv);
     draw_status_line();
 
-    auto page_pixel_size = m_pane_geometry.page_pixel_size();
+    auto page_pixel_size = m_pane_geometry.page_pixel_size(m_shows_status_line);
     if (page_pixel_size.is_empty())
         return;
     if (page_pixel_size != viewport_size().to_type<int>())
@@ -330,9 +330,9 @@ ErrorOr<void> TerminalWebView::send_image_data(StringView keys, ReadonlyBytes pi
 
 ErrorOr<void> TerminalWebView::transmit_frame(Gfx::Bitmap const& bitmap)
 {
-    // A frame laid out for a larger pane than this one is cut to fit above the status line.
+    // A frame laid out for a larger pane than this one is cut to fit the pane.
     auto size = bitmap.size();
-    auto page_pixel_size = m_pane_geometry.page_pixel_size();
+    auto page_pixel_size = m_pane_geometry.page_pixel_size(m_shows_status_line);
     if (!page_pixel_size.is_empty())
         size = { min(size.width(), page_pixel_size.width()), min(size.height(), page_pixel_size.height()) };
     if (size.is_empty())
@@ -519,6 +519,10 @@ bool TerminalWebView::handle_browser_shortcut(TerminalKeyReport const& report)
         return true;
     }
     if (is_key_with(KeyCode::Key_L, KeyModifier::Mod_Ctrl)) {
+        // Without the status line the prompt would be typed blind, and the client that
+        // draws its own address bar owns this key.
+        if (!m_shows_status_line)
+            return true;
         open_url_prompt();
         return true;
     }
@@ -629,6 +633,18 @@ void TerminalWebView::handle_command(TerminalCommand const& command)
         reload();
     } else if (command.name == "quit"sv) {
         quit();
+    } else if (command.name == "chrome"sv) {
+        // A terminal multiplexer or another client may draw its own address bar and tabs,
+        // and then wants the page to fill the pane instead of leaving the last row for a
+        // status line it already shows elsewhere.
+        auto shows_status_line = command.argument != "off"sv;
+        if (shows_status_line == m_shows_status_line)
+            return;
+        m_shows_status_line = shows_status_line;
+        m_drawn_status_line = {};
+        apply_pane_geometry();
+        if (m_shows_status_line)
+            show_notice("status line on"sv);
     } else if (command.name == "frames"sv) {
         m_sends_damaged_rectangles = command.argument == "damage"sv;
         m_frame_needs_full_redraw = true;
@@ -673,6 +689,14 @@ void TerminalWebView::draw_status_line()
 {
     if (!m_terminal_modes_entered || m_pane_geometry.rows <= 0 || m_pane_geometry.columns <= 0)
         return;
+
+    if (!m_shows_status_line) {
+        if (!m_drawn_status_line.is_empty()) {
+            write_to_terminal(ByteString::formatted("\x1b[{};1H\x1b[2K", m_pane_geometry.rows));
+            m_drawn_status_line = {};
+        }
+        return;
+    }
 
     StringBuilder text;
     if (m_url_prompt_text.has_value()) {

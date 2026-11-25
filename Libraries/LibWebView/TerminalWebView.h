@@ -40,8 +40,11 @@ private:
 
         int cell_width() const { return columns > 0 ? pixel_size.width() / columns : 0; }
         int cell_height() const { return rows > 0 ? pixel_size.height() / rows : 0; }
-        // Everything but the last row, which holds the status line.
-        Gfx::IntSize page_pixel_size() const { return { columns * cell_width(), (rows - 1) * cell_height() }; }
+        // The last row holds the status line, unless the client draws its own.
+        Gfx::IntSize page_pixel_size(bool reserve_status_line = true) const
+        {
+            return { columns * cell_width(), (rows - (reserve_status_line ? 1 : 0)) * cell_height() };
+        }
     };
 
     enum class GraphicsTransmission : u8 {
@@ -97,6 +100,8 @@ private:
     u64 m_image_data_transmissions { 0 };
     GraphicsTransmission m_graphics_transmission { GraphicsTransmission::TemporaryFile };
     bool m_sends_damaged_rectangles { false };
+    // A client that draws its own address bar and tabs can ask for the whole pane.
+    bool m_shows_status_line { true };
     Optional<u32> m_displayed_image_id;
     Gfx::IntSize m_displayed_image_size;
 
