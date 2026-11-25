@@ -528,7 +528,14 @@ public:
     // Takes the record its DOM target installed, where it followed the target's record. The target still holds the
     // record it held before until the engine takes the new one in, so the render state compares the two.
     void set_style_record_identity(CSS::InstalledStyle const&);
+<<<<<<< HEAD
     void refresh_style_from_arena(CSS::StyleRecordID, void const* payloads, bool derived, bool should_attach_resources);
+=======
+    // Whether the row shows a style the arena derived from its node's record, such as a body whose overflow went to
+    // the viewport. set_style_record_identity() leaves such a row as it is, and only apply_style() derives it again.
+    bool has_layout_derived_style() const { return m_has_layout_derived_style; }
+    void refresh_style_from_arena(CSS::StyleRecordID, CSS::ComputedValuesFFI::StyleRecordGroups const* payloads, bool derived, bool should_attach_resources);
+>>>>>>> 02b30793 (LibWeb: Apply animated styles to a body that propagates its overflow)
     // The pin lives on the node's arena row and is released with it, so
     // Document::tear_down_layout_tree() must free the layout root before the document's style
     // engine goes away. Every document destruction path goes through that teardown.
