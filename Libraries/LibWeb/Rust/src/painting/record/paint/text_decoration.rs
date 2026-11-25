@@ -73,6 +73,11 @@ fn first_available_font(
     Some(arena.node_style_if_live(node)?.first_available_font())
 }
 
+// The computed-value kinds of text-decoration-thickness, as the style system packs them.
+// https://drafts.csswg.org/css-text-decor-4/#text-decoration-thickness-property
+const TEXT_DECORATION_THICKNESS_KIND_FROM_FONT: u8 = 1;
+const TEXT_DECORATION_THICKNESS_KIND_LENGTH_PERCENTAGE: u8 = 2;
+
 fn resolve_text_decoration_thickness(
     arena: &impl PaintRead,
     value_node: crate::layout::node_data::NodeSlotId,
@@ -84,13 +89,20 @@ fn resolve_text_decoration_thickness(
         return one;
     };
     let text_reset = style.text_reset();
+    // https://drafts.csswg.org/css-text-decor-4/#valdef-text-decoration-thickness-from-font
+    // If the first available font has metrics indicating a preferred underline width, use that width, otherwise
+    // behaves as auto. post.underlineThickness is the metric, and LibGfx reads it at the font's pixel size.
+    if text_reset.text_decoration_thickness_kind == TEXT_DECORATION_THICKNESS_KIND_FROM_FONT {
+        if let Some(width) = first_available_font(arena, basis_node)
+            .and_then(|font| font.math_data().underline_thickness())
+        {
+            // A line thinner than a pixel is a line nobody sees, which is why auto has the same floor.
+            return CssPixels::nearest_value_for_f32(width).max(one);
+        }
+    }
     // https://drafts.csswg.org/css-text-decor-4/#valdef-text-decoration-thickness-auto
     // The UA chooses an appropriate thickness for text decoration lines; see below.
-    // https://drafts.csswg.org/css-text-decor-4/#valdef-text-decoration-thickness-from-font
-    // If the first available font has metrics indicating a preferred underline width, use that width,
-    // otherwise behaves as auto.
-    // FIXME: Implement this properly.
-    if text_reset.text_decoration_thickness_kind != 2 {
+    if text_reset.text_decoration_thickness_kind != TEXT_DECORATION_THICKNESS_KIND_LENGTH_PERCENTAGE {
         return glyph_height.scaled(0.1).max(one);
     }
     // https://drafts.csswg.org/css-text-decor-4/#valdef-text-decoration-thickness-length-percentage
