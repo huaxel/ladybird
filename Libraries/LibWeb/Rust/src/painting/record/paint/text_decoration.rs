@@ -51,6 +51,8 @@ pub(crate) struct TextDecorationSet {
     pub text_underline_offset: CssPixels,
     pub text_underline_position_horizontal: u8,
     pub text_underline_position_vertical: u8,
+    /// post.underlinePosition of the decorating font, in pixels and y-up, when the font has one.
+    pub decorating_underline_position: Option<CssPixels>,
     /// Whether the underline goes on the line-over side of the text and the overline on its line-under side, as
     /// text-underline-position: right asks for in vertical text.
     pub lines_swap_sides: bool,
@@ -93,8 +95,8 @@ fn resolve_text_decoration_thickness(
     // If the first available font has metrics indicating a preferred underline width, use that width, otherwise
     // behaves as auto. post.underlineThickness is the metric, and LibGfx reads it at the font's pixel size.
     if text_reset.text_decoration_thickness_kind == TEXT_DECORATION_THICKNESS_KIND_FROM_FONT {
-        if let Some(width) = first_available_font(arena, basis_node)
-            .and_then(|font| font.math_data().underline_thickness())
+        if let Some(width) =
+            first_available_font(arena, basis_node).and_then(|font| font.math_data().underline_thickness())
         {
             // A line thinner than a pixel is a line nobody sees, which is why auto has the same floor.
             return CssPixels::nearest_value_for_f32(width).max(one);
@@ -243,6 +245,10 @@ pub(crate) fn decoration_sets_for_span(
             set.decorating_font_pixel_size = decorating_font.facts().pixel_size;
             set.decorating_font_descent = decorating_font.facts().descent;
             set.decorating_font_point_size = decorating_font.facts().point_size as i32;
+            set.decorating_underline_position = decorating_font
+                .math_data()
+                .underline_position()
+                .map(CssPixels::nearest_value_for_f32);
             set.text_font_pixel_size = text_font.facts().pixel_size;
             match highlight_metrics {
                 Some(metrics) => {
@@ -622,6 +628,13 @@ fn css_decoration_lines(set: &TextDecorationSet) -> Vec<CssDecorationLine> {
                 text_underline_position_horizontal::UNDER => {
                     baseline + CssPixels::nearest_value_for_f32(set.decorating_font_descent) + offset
                 }
+                // https://drafts.csswg.org/css-text-decor-4/#valdef-text-underline-position-from-font
+                // The font's preferred position when it has one, otherwise this behaves as auto. The table's position
+                // is y-up, so a negative one places the line that far below the baseline.
+                text_underline_position_horizontal::FROM_FONT => match set.decorating_underline_position {
+                    Some(position) => baseline - position + offset,
+                    None => baseline + offset,
+                },
                 _ => baseline + offset,
             };
             top_edge + line_thickness.div_as_fraction(two)

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<link rel="match" href="../../expected/css/text-decoration-from-font-position-ref.html" />
+<style>
+    @font-face {
+        font-family: Ahem;
+        src: url("../../data/fonts/Ahem.ttf");
+    }
+    body {
+        margin: 0;
+        font: 500px/1 Ahem;
+    }
+    p {
+        margin: 0;
+        /* Ahem's post table puts the top of its underline 133 units per 1000 below the baseline, which is 66.5px at
+           this size. The text is spaces, because Ahem's glyphs are solid squares that would cover the line. */
+        white-space: pre;
+        text-decoration: underline;
+        /* Zero, so that the only thing placing the line is the font's own preference: the default is an
+           automatic 2px offset on top of it. */
+        text-underline-offset: 0;
+        text-underline-position: from-font;
+    }
+</style>
+<p>    </p>

@@ -43,6 +43,9 @@ pub struct FfiMathData {
     pub has_underline_thickness: bool,
     /// post.underlineThickness.
     pub underline_thickness: f32,
+    pub has_underline_position: bool,
+    /// post.underlinePosition, in the y-up convention of the table: negative is below the baseline.
+    pub underline_position: f32,
 }
 
 /// The ink extents of a glyph and its advance, in pixels.
@@ -143,6 +146,11 @@ impl FfiMathData {
 
     pub fn underline_thickness(&self) -> Option<f32> {
         self.has_underline_thickness.then_some(self.underline_thickness)
+    }
+
+    /// post.underlinePosition: where the top of the underline sits, negative below the baseline.
+    pub fn underline_position(&self) -> Option<f32> {
+        self.has_underline_position.then_some(self.underline_position)
     }
 
     pub fn min_connector_overlap(&self, axis: StretchAxis) -> f32 {
