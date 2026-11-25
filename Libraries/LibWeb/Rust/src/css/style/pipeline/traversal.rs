@@ -1549,6 +1549,19 @@ impl<'a> Scratch<'a> {
             }
         };
         let custom_properties = registered.unwrap_or(custom_properties);
+        // `content` may be a var() that resolves to none, which no look at the winners can see: the
+        // pseudo-element generates no box just as it would have with none written, so it keeps no style,
+        // and nothing of it -- its animations included -- exists. Only `::before` and `::after` generate a
+        // box out of `content`; every other pseudo-element generates one whatever its content says.
+        if generating
+            && matches!(
+                kind,
+                super::super::publication::pseudo_kind::BEFORE | super::super::publication::pseudo_kind::AFTER
+            )
+            && !computed_content_generates(&computed)
+        {
+            return PseudoElementOutcome::GeneratesNoBox;
+        }
         let asked_own_style = subject.asked_pseudo_element_style.get();
         let container_reads = subject.container_reads.into_inner();
         let reads_container_style = container_reads.is_some();
@@ -3121,6 +3134,23 @@ fn computed_display_is_none(computed: &super::compute::ComputedElement) -> bool 
             .value(crate::css::property_metadata::property_id::DISPLAY),
     )
     .is_none()
+}
+
+/// Whether a computed `content` gives the `::before` or `::after` it belongs to something to show.
+/// https://drafts.csswg.org/css-content-3/#content-property
+fn computed_content_generates(computed: &super::compute::ComputedElement) -> bool {
+    match computed
+        .groups
+        .value(crate::css::property_metadata::property_id::CONTENT)
+        .optional_data()
+    {
+        Some(crate::css::style_value::StyleValueData::Keyword { keyword }) => {
+            *keyword != crate::css::style_compute::keyword::NONE
+                && *keyword != crate::css::style_compute::keyword::NORMAL
+        }
+        Some(_) => true,
+        None => false,
+    }
 }
 
 /// Style the pseudo-element `target` of `node` for a read of its style, whether or not it
