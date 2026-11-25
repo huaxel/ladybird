@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<link rel="match" href="../../expected/css/text-decoration-thickness-from-font-ref.html" />
+<style>
+    @font-face {
+        font-family: Ahem;
+        src: url("../../data/fonts/Ahem.ttf");
+    }
+    body {
+        margin: 0;
+        font: 100px/1 Ahem;
+    }
+    p {
+        margin: 0;
+        /* Ahem's post table asks for an underline of 20 units per 1000, which is 2px at this size. The text is
+           spaces, because Ahem's glyphs are solid squares that would cover the line. */
+        white-space: pre;
+        text-decoration: underline;
+        text-decoration-thickness: from-font;
+    }
+</style>
+<p>    </p>
