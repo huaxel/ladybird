@@ -278,6 +278,8 @@ Font::MathData const& Font::math_data() const
         hb_position_t position = 0;
         data->has_underline_thickness = hb_ot_metrics_get_position(m_harfbuzz_font, HB_OT_METRICS_TAG_UNDERLINE_SIZE, &position);
         data->underline_thickness = harfbuzz_position_to_pixels(position);
+        data->has_underline_position = hb_ot_metrics_get_position(m_harfbuzz_font, HB_OT_METRICS_TAG_UNDERLINE_OFFSET, &position);
+        data->underline_position = harfbuzz_position_to_pixels(position);
 
         m_math_data = move(math_data);
     });
