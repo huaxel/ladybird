@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<style>
+    @keyframes fade {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    #literal::after { content: none; animation: fade 1s; }
+    #through-var::after { content: var(--on, none); animation: fade 1s; }
+    #generated::after { content: var(--on, "x"); animation: fade 1s; }
+</style>
+<div id="literal"></div>
+<div id="through-var"></div>
+<div id="generated"></div>
+<script>
+    test(() => {
+        for (const id of ["literal", "through-var", "generated"]) {
+            const animations = document.getElementById(id).getAnimations();
+            const targets = animations.map(animation => animation.effect.pseudoElement ?? "(element)");
+            println(`${id}: ${targets.join(", ") || "none"}`);
+        }
+    });
+</script>
