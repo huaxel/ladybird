@@ -98,8 +98,12 @@ public:
 
     GC::Ptr<SMILTimeContainer> time_container() const { return m_time_container; }
 
-    // The width/height attributes parsed as the CSS width/height properties, when that yields a
-    // plain <length> - the only case the natural size negotiation can use.
+    // The width/height attributes as the plain <number> | <length> | <percentage> they are, which is what a nested
+    // <svg> sizes its viewport from.
+    [[nodiscard]] Optional<SVGLengthValue> width_attribute_value() const;
+    [[nodiscard]] Optional<SVGLengthValue> height_attribute_value() const;
+
+    // The same, when the attribute is a plain <length> - the only case the natural size negotiation can use.
     [[nodiscard]] Optional<CSS::Length> width_attribute_length() const;
     [[nodiscard]] Optional<CSS::Length> height_attribute_length() const;
 
@@ -131,8 +135,8 @@ private:
 
     Optional<ViewBox> m_fallback_view_box_for_svg_as_image;
 
-    mutable Optional<Optional<CSS::Length>> m_cached_width_attribute_length;
-    mutable Optional<Optional<CSS::Length>> m_cached_height_attribute_length;
+    mutable Optional<Optional<SVGLengthValue>> m_cached_width_attribute_value;
+    mutable Optional<Optional<SVGLengthValue>> m_cached_height_attribute_value;
 
     mutable GC::Ptr<Geometry::DOMPointReadOnly> m_current_translate;
 

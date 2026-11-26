@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<style>
+    body {
+        margin: 0;
+    }
+    /* The same rendering, with the size the nested svg elements take from their attributes: 12 of the 24 user units,
+       and 50% of them. */
+    #outer {
+        width: 100px;
+        height: 100px;
+    }
+    rect {
+        fill: green;
+    }
+    svg svg:last-of-type rect {
+        fill: blue;
+    }
+</style>
+<svg id="outer" viewBox="0 0 24 24">
+    <svg width="12" height="12"><rect width="100%" height="100%" /></svg>
+    <svg x="12" y="12" width="50%" height="50%"><rect width="100%" height="100%" /></svg>
+</svg>

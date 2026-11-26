@@ -302,6 +302,10 @@ static RustFFI::FfiSvgAttributeFacts build_svg_attribute_facts(DOM::Element& dom
     // resolves against the box's style, and the aspect ratio its active SVG view or viewBox gives it.
     RustFFI::FfiSvgLengthValue natural_width { .value = 0, .kind = RustFFI::SVG_LENGTH_KIND_NONE, .unit = 0 };
     RustFFI::FfiSvgLengthValue natural_height { .value = 0, .kind = RustFFI::SVG_LENGTH_KIND_NONE, .unit = 0 };
+    // A nested <svg> sizes its viewport from its width and height attributes, whatever the CSS properties of the same
+    // names say, so layout needs them as the plain numbers, lengths and percentages they are.
+    RustFFI::FfiSvgLengthValue width_attribute { .value = 0, .kind = RustFFI::SVG_LENGTH_KIND_NONE, .unit = 0 };
+    RustFFI::FfiSvgLengthValue height_attribute { .value = 0, .kind = RustFFI::SVG_LENGTH_KIND_NONE, .unit = 0 };
     Optional<CSSPixelFraction> view_box_aspect_ratio;
     if (auto const* svg_element = as_if<SVG::SVGSVGElement>(dom_node)) {
         auto to_ffi_length = [](Optional<CSS::Length> const& length) -> RustFFI::FfiSvgLengthValue {
@@ -311,6 +315,8 @@ static RustFFI::FfiSvgAttributeFacts build_svg_attribute_facts(DOM::Element& dom
         };
         natural_width = to_ffi_length(svg_element->width_attribute_length());
         natural_height = to_ffi_length(svg_element->height_attribute_length());
+        width_attribute = to_ffi_svg_length_value(svg_element->width_attribute_value());
+        height_attribute = to_ffi_svg_length_value(svg_element->height_attribute_value());
         view_box_aspect_ratio = SVG::SVGSVGElement::view_box_natural_aspect_ratio(*svg_element);
     }
 
@@ -349,6 +355,8 @@ static RustFFI::FfiSvgAttributeFacts build_svg_attribute_facts(DOM::Element& dom
         .text_path_start_offset = to_ffi_number_percentage(start_offset),
         .natural_width = natural_width,
         .natural_height = natural_height,
+        .width_attribute = width_attribute,
+        .height_attribute = height_attribute,
         .has_view_box_aspect_ratio = view_box_aspect_ratio.has_value(),
         .view_box_aspect_ratio_numerator = view_box_aspect_ratio.has_value() ? view_box_aspect_ratio->numerator() : 0,
         .view_box_aspect_ratio_denominator = view_box_aspect_ratio.has_value() ? view_box_aspect_ratio->denominator() : 0,
