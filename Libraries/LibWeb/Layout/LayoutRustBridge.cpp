@@ -282,9 +282,11 @@ static RustFFI::FfiSvgAttributeFacts build_svg_attribute_facts(DOM::Element& dom
 
     CSS::StyleAtomID reference_fragment;
     SVG::NumberPercentage start_offset = SVG::NumberPercentage::create_number(0);
+    bool text_path_reverses_path = false;
     if (auto const* text_path_element = as_if<SVG::SVGTextPathElement>(dom_node)) {
         reference_fragment = svg_reference_fragment_atom(dom_node, text_path_element->href_attribute_value());
         start_offset = text_path_element->parsed_start_offset().value_or(start_offset);
+        text_path_reverses_path = text_path_element->reverses_path();
     } else if (auto const* pattern_element = as_if<SVG::SVGPatternElement>(dom_node)) {
         // The pattern a <pattern> inherits its content and attributes from. An empty href names nothing, rather than
         // naming the document's own fragment.
@@ -347,6 +349,7 @@ static RustFFI::FfiSvgAttributeFacts build_svg_attribute_facts(DOM::Element& dom
         .fill_reference_atom = style_references[2].value(),
         .stroke_reference_atom = style_references[3].value(),
         .text_path_start_offset = to_ffi_number_percentage(start_offset),
+        .text_path_reverses_path = text_path_reverses_path,
         .natural_width = natural_width,
         .natural_height = natural_height,
         .has_view_box_aspect_ratio = view_box_aspect_ratio.has_value(),

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<style>
+    @font-face {
+        font-family: Ahem;
+        src: url("../../data/fonts/Ahem.ttf");
+    }
+    text {
+        font: 20px Ahem;
+        fill: green;
+    }
+</style>
+<svg width="200" height="60">
+    <!-- The same text, laid along the very same line drawn the other way. -->
+    <path id="path" d="M 180 30 H 20" fill="none" />
+    <text><textPath href="#path">XXXX</textPath></text>
+</svg>

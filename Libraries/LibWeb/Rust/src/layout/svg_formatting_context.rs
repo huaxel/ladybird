@@ -379,6 +379,9 @@ pub struct FfiSvgAttributeFacts {
     pub stroke_reference_atom: u32,
     /// The `startOffset` of a `<textPath>`, against the length of the path it follows.
     pub text_path_start_offset: FfiSvgNumberPercentage,
+    /// Whether a `<textPath>` writes `side="right"`, which places its text on the other side of the path by laying it
+    /// along the path reversed.
+    pub text_path_reverses_path: bool,
     /// An `<svg>`'s `width` and `height` where they are a `<length>`, which its natural size is
     /// negotiated from.
     pub natural_width: FfiSvgLengthValue,
@@ -3090,11 +3093,14 @@ impl<'pass> SvgFormattingContext<'pass> {
             }
         });
 
+        let text_path_attributes = self.svg_attributes(text_path_box);
         // https://svgwg.org/svg2-draft/text.html#TextPathElementStartOffsetAttribute
-        let mut start_offset = self
-            .svg_attributes(text_path_box)
+        let mut start_offset = text_path_attributes
             .text_path_start_offset
             .resolve_relative_to(shape_path.length());
+        // https://svgwg.org/svg2-draft/text.html#TextLayoutPath
+        // If the ‘side’ attribute of the ‘textPath’ element is 'right', then reverse path.
+        let reverses_path = text_path_attributes.text_path_reverses_path;
         // FIXME: Take writing mode and text direction into account.
         if extent_start <= extent_end {
             let leading_dx = leading_dx.unwrap_or(0.0);
@@ -3112,7 +3118,10 @@ impl<'pass> SvgFormattingContext<'pass> {
             let cells = cells_of_elements.remove(&element).unwrap_or_default();
             text_on_path_glyphs.insert(
                 element,
-                (shape_path.place_glyph_runs_along(&element_runs, start_offset), cells),
+                (
+                    shape_path.place_glyph_runs_along(&element_runs, start_offset, reverses_path),
+                    cells,
+                ),
             );
         }
         for (element, cells) in cells_of_elements {
@@ -3122,7 +3131,7 @@ impl<'pass> SvgFormattingContext<'pass> {
         let mut segments = Vec::new();
         let paints_as_one_path = runs.iter().all(|(after_child, _)| after_child.is_invalid());
         for (after_child, own_runs) in runs {
-            let part = shape_path.place_glyph_runs_along(&own_runs, start_offset);
+            let part = shape_path.place_glyph_runs_along(&own_runs, start_offset, reverses_path);
             path.append_path(&part);
             if !paints_as_one_path {
                 segments.push(fragment_tree::SvgTextSegment {

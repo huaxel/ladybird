@@ -102,6 +102,7 @@ namespace Web::SVG::AttributeNames {
     __ENUMERATE_SVG_ATTRIBUTE(ry, "ry")                                                 \
     __ENUMERATE_SVG_ATTRIBUTE(scale, "scale")                                           \
     __ENUMERATE_SVG_ATTRIBUTE(seed, "seed")                                             \
+    __ENUMERATE_SVG_ATTRIBUTE(side, "side")                                             \
     __ENUMERATE_SVG_ATTRIBUTE(slope, "slope")                                           \
     __ENUMERATE_SVG_ATTRIBUTE(specularConstant, "specularConstant")                     \
     __ENUMERATE_SVG_ATTRIBUTE(specularExponent, "specularExponent")                     \
