@@ -37,7 +37,10 @@ add_subdirectory(Meta)
 if (NOT WIN32)
     string(TOUPPER "${RUST_TARGET_TRIPLE}" rust_target_upper)
     string(REPLACE "-" "_" rust_target_upper "${rust_target_upper}")
+    # The crates the tests compile go through the same compiler as the libraries, which is the one this configure found
+    # and pinned: cargo would otherwise take `rustc` from PATH, which is not always that one.
     set(rust_test_env
+        "CARGO_BUILD_RUSTC=${RUST_RUSTC}"
         "CARGO_TARGET_${rust_target_upper}_RUSTFLAGS=${RUSTC_TARGET_FLAGS}"
         "LLVM_LIBC_INCLUDE_DIR=${LLVM_LIBC_INCLUDE_DIR}/llvm-libc"
     )
