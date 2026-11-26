@@ -4,6 +4,36 @@ set_property(GLOBAL PROPERTY JOB_POOLS "${JOB_POOLS};cargo=1")
 find_program(RUST_CARGO cargo REQUIRED)
 find_program(RUST_RUSTC rustc REQUIRED)
 
+# The workspace pins a toolchain, and this configure compiles every crate with the `rustc` it found. One that is not the
+# pinned toolchain compiles the way its own release does, and this build always passes -Dwarnings, so the day that
+# release deprecates something the crates use, a crate nobody edited stops compiling with a message about the crate.
+# A `rustc` that goes through rustup answers with the pinned version whatever it is, so this only speaks up when it
+# answers with another one.
+if (EXISTS "${CMAKE_SOURCE_DIR}/rust-toolchain.toml")
+    file(READ "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" pinned_toolchain_file)
+    string(REGEX MATCH "channel *= *\"([^\"]+)\"" _ "${pinned_toolchain_file}")
+    set(pinned_toolchain_channel "${CMAKE_MATCH_1}")
+    if (pinned_toolchain_channel)
+        # From the source directory, because a rustup shim answers with the toolchain the workspace pins only when it
+        # can see rust-toolchain.toml.
+        execute_process(
+            COMMAND "${RUST_RUSTC}" --version
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            OUTPUT_VARIABLE found_rustc_version
+            ERROR_QUIET
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if (NOT found_rustc_version MATCHES "^rustc ${pinned_toolchain_channel}[ (]")
+            message(WARNING
+                "rustc at ${RUST_RUSTC} is not the toolchain rust-toolchain.toml pins (${pinned_toolchain_channel}): "
+                "it reports '${found_rustc_version}'. The build passes -Dwarnings to every crate, so a newer rustc "
+                "can fail it over a deprecation in code this tree has not changed. Put the pinned toolchain first on "
+                "PATH, or set RUST_RUSTC to it."
+            )
+        endif()
+    endif()
+endif()
+
 if (NOT DEFINED RUSTC_WRAPPER)
     set(RUSTC_WRAPPER "$ENV{RUSTC_WRAPPER}" CACHE FILEPATH "Path to a rustc wrapper program, e.g. sccache")
 endif()
