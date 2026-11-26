@@ -25,6 +25,8 @@ void SVGTextPathElement::attribute_changed(Utf16FlyString const& name, Optional<
 
     if (name == SVG::AttributeNames::startOffset)
         m_start_offset = parse_number_percentage(value.value_or({}));
+    else if (name == SVG::AttributeNames::side)
+        m_reverses_path = value.value_or({}).equals_ignoring_ascii_case("right"sv);
 }
 
 Optional<Utf16String> SVGTextPathElement::href_attribute_value() const

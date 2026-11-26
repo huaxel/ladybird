@@ -285,8 +285,10 @@ impl Path {
     /// text on a path: Each glyph is centered on the point at the distance of the middle of its advance (its x position
     /// plus the offset, plus half its advance), turned to the direction of the path there, and moved off the path, at
     /// a right angle to it, by as much as its baseline is shifted. A glyph whose middle is off either end isn't drawn.
+    /// Laying them along the path reversed counts the distances from the other end and turns each glyph the other way,
+    /// which is what a `<textPath>` writing `side="right"` asks for.
     /// https://svgwg.org/svg2-draft/text.html#TextLayoutPath
-    pub fn place_glyph_runs_along(&self, runs: &[GlyphRun], offset: f32) -> Path {
+    pub fn place_glyph_runs_along(&self, runs: &[GlyphRun], offset: f32, reversed: bool) -> Path {
         let mut geometry = PathGeometry::new();
         let Some(contour) = measure::ContourMeasure::contours_of(&self.geometry).next() else {
             return Self::from_geometry(geometry);
@@ -302,6 +304,13 @@ impl Path {
             for placed in run.glyphs.placed() {
                 let half_advance = placed.glyph.advance / 2.0;
                 let midpoint_distance = offset + placed.x + half_advance;
+                // The path reversed is the same path read from its end, so a distance along it is the one that many
+                // from the other end.
+                let midpoint_distance = if reversed {
+                    path_length - midpoint_distance
+                } else {
+                    midpoint_distance
+                };
                 // "Glyphs whose midpoint-on-the-path are off the path are not rendered."
                 if !(0.0..=path_length).contains(&midpoint_distance) {
                     continue;
@@ -309,17 +318,22 @@ impl Path {
                 // AD-HOC: The spec turns each glyph to the line through the start and the end of its advance on the
                 //         path. Like other engines, this turns it to the direction of the path at its midpoint.
                 let (midpoint, tangent) = contour.position_and_tangent(midpoint_distance);
+                let (tangent_x, tangent_y) = if reversed {
+                    (-tangent.x, -tangent.y)
+                } else {
+                    (tangent.x, tangent.y)
+                };
                 // A glyph's y is the top of its em box, an ascent above its baseline.
                 let baseline_shift = placed.y + ascent;
-                let normal = (-tangent.y, tangent.x);
+                let normal = (-tangent_y, tangent_x);
                 transforms.push(AffineTransform {
                     values: [
-                        tangent.x,
-                        tangent.y,
+                        tangent_x,
+                        tangent_y,
                         normal.0,
                         normal.1,
-                        midpoint.x - tangent.x * half_advance + normal.0 * baseline_shift,
-                        midpoint.y - tangent.y * half_advance + normal.1 * baseline_shift,
+                        midpoint.x - tangent_x * half_advance + normal.0 * baseline_shift,
+                        midpoint.y - tangent_y * half_advance + normal.1 * baseline_shift,
                     ],
                 });
                 glyphs.push(placed.glyph);

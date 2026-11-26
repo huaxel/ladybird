@@ -27,6 +27,10 @@ public:
     Optional<Utf16String> href_attribute_value() const;
     Optional<NumberPercentage> const& parsed_start_offset() const { return m_start_offset; }
 
+    // https://svgwg.org/svg2-draft/text.html#TextPathElementSideAttribute
+    // Determines the side of the path the text is placed on: `right` effectively reverses the path.
+    bool reverses_path() const { return m_reverses_path; }
+
     // https://w3c.github.io/svgwg/svg2-draft/text.html#__svg__SVGTextPathElement__startOffset
     REFLECT_ANIMATED_LENGTH_ATTRIBUTE_WITH_GETTER(startOffset, start_offset, Horizontal, SVGLengthValue::number(0));
 
@@ -50,6 +54,7 @@ private:
     virtual bool is_svg_text_path_element() const final { return true; }
 
     Optional<NumberPercentage> m_start_offset;
+    bool m_reverses_path { false };
 };
 
 }
