@@ -84,44 +84,45 @@ CSS::ElementBoxKind SVGSVGElement::box_kind() const
     return CSS::ElementBoxKind::SvgSvg;
 }
 
+Optional<SVG::SVGLengthValue> SVGSVGElement::width_attribute_value() const
+{
+    if (!m_cached_width_attribute_value.has_value()) {
+        // NB: If the `width` attribute is an empty string, WebKit and Blink treat it as 100% while Firefox does not
+        //     (the spec is unclear); a value that parses to nothing is treated as absent here either way.
+        m_cached_width_attribute_value = SVG::SVGLength::parse_scalar_value(attribute(SVG::AttributeNames::width).value_or({}));
+    }
+    return *m_cached_width_attribute_value;
+}
+
+Optional<SVG::SVGLengthValue> SVGSVGElement::height_attribute_value() const
+{
+    if (!m_cached_height_attribute_value.has_value())
+        m_cached_height_attribute_value = SVG::SVGLength::parse_scalar_value(attribute(SVG::AttributeNames::height).value_or({}));
+    return *m_cached_height_attribute_value;
+}
+
+// A percentage, or a plain number, is no <length> the natural size can be negotiated from.
+static Optional<CSS::Length> attribute_length(SVG::SVGLengthValue const& value)
+{
+    if (value.kind() != SVG::SVGLengthValue::Kind::Length)
+        return {};
+    return value.to_length();
+}
+
 Optional<CSS::Length> SVGSVGElement::width_attribute_length() const
 {
-    if (m_cached_width_attribute_length.has_value())
-        return *m_cached_width_attribute_length;
-
-    auto parsing_context = CSS::Parser::ParsingParams { document(), CSS::Parser::ParsingMode::SVGPresentationAttribute };
-    auto width_attribute = attribute(SVG::AttributeNames::width);
-
-    // NB: If the `width` attribute is an empty string, WebKit and Blink treat it as 100% while Firefox does not (the
-    //     spec is unclear); a percentage never contributes here either way, so nothing distinguishes it from any other
-    //     non-<length> value.
-    Optional<CSS::Length> result;
-    if (auto width_value = parse_css_value(parsing_context, width_attribute.value_or({}), CSS::PropertyID::Width)) {
-        if (width_value->is_length())
-            result = width_value->as_length().length();
-    }
-
-    m_cached_width_attribute_length = result;
-    return result;
+    auto value = width_attribute_value();
+    if (!value.has_value())
+        return {};
+    return attribute_length(*value);
 }
 
 Optional<CSS::Length> SVGSVGElement::height_attribute_length() const
 {
-    if (m_cached_height_attribute_length.has_value())
-        return *m_cached_height_attribute_length;
-
-    auto parsing_context = CSS::Parser::ParsingParams { document(), CSS::Parser::ParsingMode::SVGPresentationAttribute };
-    auto height_attribute = attribute(SVG::AttributeNames::height);
-
-    // NB: See the `width` note above; an empty string `height` likewise never contributes a <length>.
-    Optional<CSS::Length> result;
-    if (auto height_value = parse_css_value(parsing_context, height_attribute.value_or({}), CSS::PropertyID::Height)) {
-        if (height_value->is_length())
-            result = height_value->as_length().length();
-    }
-
-    m_cached_height_attribute_length = result;
-    return result;
+    auto value = height_attribute_value();
+    if (!value.has_value())
+        return {};
+    return attribute_length(*value);
 }
 
 void SVGSVGElement::attribute_changed(Utf16FlyString const& name, Optional<Utf16String> const& old_value, Optional<Utf16String> const& value, Optional<Utf16FlyString> const& namespace_)
@@ -130,11 +131,11 @@ void SVGSVGElement::attribute_changed(Utf16FlyString const& name, Optional<Utf16
     SVGFitToViewBox::attribute_changed(*this, name, value);
 
     if (name.equals_ignoring_ascii_case(SVG::AttributeNames::width)) {
-        m_cached_width_attribute_length = {};
+        m_cached_width_attribute_value = {};
         update_fallback_view_box_for_svg_as_image();
     }
     if (name.equals_ignoring_ascii_case(SVG::AttributeNames::height)) {
-        m_cached_height_attribute_length = {};
+        m_cached_height_attribute_value = {};
         update_fallback_view_box_for_svg_as_image();
     }
 }

@@ -386,6 +386,10 @@ pub struct FfiSvgAttributeFacts {
     /// negotiated from.
     pub natural_width: FfiSvgLengthValue,
     pub natural_height: FfiSvgLengthValue,
+    /// An `<svg>`'s `width` and `height` attributes as they are written, which a nested `<svg>`
+    /// sizes its viewport from.
+    pub width_attribute: FfiSvgLengthValue,
+    pub height_attribute: FfiSvgLengthValue,
     /// The natural aspect ratio an `<svg>`'s active SVG view or viewBox gives it, which the
     /// negotiation falls back to where its width and height do not both give it one.
     pub has_view_box_aspect_ratio: bool,
@@ -3710,20 +3714,23 @@ impl<'pass> SvgFormattingContext<'pass> {
         // https://svgwg.org/svg2-draft/coords.html#EstablishingANewSVGViewport.
         let viewport_cells = self.cells_of_svg_box(viewport);
         let style = self.style(viewport);
+        let attributes = self.svg_attributes(viewport);
         let nested_viewport_x = style.x().to_px(self.viewport_width);
         let nested_viewport_y = style.y().to_px(self.viewport_height);
-        // The value auto for width and height on the ‘svg’ element is treated as 100%.
         // https://svgwg.org/svg2-draft/geometry.html#Sizing
-        let nested_viewport_width = if style.width().is_auto() {
-            self.viewport_width
-        } else {
-            style.width().to_px(self.viewport_width)
+        // Other SVG elements, such as nested ‘svg’ elements, the ‘use’ element, and the ‘symbol’ element, also have
+        // ‘width’ and ‘height’ attributes, but do not accept them as CSS properties. On these elements, the width and
+        // height must be specified as XML attributes; CSS properties with the same names are ignored.
+        // The value auto for width and height on the ‘svg’ element is treated as 100%.
+        let size_from_attribute = |attribute: FfiSvgLengthValue, basis: CssPixels| match attribute.kind {
+            SVG_LENGTH_KIND_NONE => basis,
+            // A plain number is that many user units, which is what a pixel is here.
+            SVG_LENGTH_KIND_NUMBER => CssPixels::truncated_value_for(attribute.value),
+            SVG_LENGTH_KIND_PERCENTAGE => CssPixels::truncated_value_for(basis.to_double() * attribute.value / 100.0),
+            _ => resolve_svg_length(&self.run.pass, viewport, attribute),
         };
-        let nested_viewport_height = if style.height().is_auto() {
-            self.viewport_height
-        } else {
-            style.height().to_px(self.viewport_height)
-        };
+        let nested_viewport_width = size_from_attribute(attributes.width_attribute, self.viewport_width);
+        let nested_viewport_height = size_from_attribute(attributes.height_attribute, self.viewport_height);
 
         Self::set_definite_content_size(&viewport_cells, nested_viewport_width, nested_viewport_height);
 

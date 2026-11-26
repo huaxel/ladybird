@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<link rel="match" href="../../expected/svg/nested-svg-ignores-css-width-height-ref.html" />
+<style>
+    body {
+        margin: 0;
+    }
+    /* Applies to the outermost svg, and must be ignored by the nested ones. A nested svg that took these would size
+       its own content from them, so the squares below would cover the whole viewport instead of a quarter of it each. */
+    svg {
+        width: 100px;
+        height: 100px;
+    }
+    rect {
+        fill: green;
+    }
+    svg svg:last-of-type rect {
+        fill: blue;
+    }
+</style>
+<svg viewBox="0 0 24 24">
+    <svg width="12" height="12"><rect width="100%" height="100%" /></svg>
+    <svg x="12" y="12" width="50%" height="50%"><rect width="100%" height="100%" /></svg>
+</svg>
