@@ -84,12 +84,10 @@ impl<A: PaintRead> PointResolver<'_, A> {
 
     /// The caret position inside the characters of an SVG text box: the character the point is over, or the one it is
     /// nearest along the inline axis of the box.
-    /// FIXME: Only text whose characters all come from one text node answers, since that is what a cell is a code unit
-    ///        of. A text element whose own text is split across text nodes still falls back to the start of its box,
-    ///        and so does a <textPath>, whose cells are not laid along its path yet.
+    /// FIXME: A <textPath> falls back to the start of its box, because its cells are not laid along its path yet.
     fn in_svg_text(&self, node: NodeSlotId) -> Option<FfiCaretAt> {
         let arena = self.arena;
-        let text = paintable_geometry::committed_svg_text_own_character_cells_node(arena, node)?;
+        let spans = paintable_geometry::committed_svg_text_own_character_cells_spans(arena, node)?;
         let cells = paintable_geometry::committed_svg_text_own_character_cells(arena, node)?;
         let point = self.point_in_descendants_space_of(node)?;
         let (point_x, point_y) = (point.x.to_float(), point.y.to_float());
@@ -129,11 +127,17 @@ impl<A: PaintRead> PointResolver<'_, A> {
             }
         }
         let (_, index, after) = nearest?;
-        let offset = if after { index + 1 } else { index };
+        // Each span is the run of one text node's code units, so the cell names a code unit of the node it falls in.
+        let index = u32::try_from(index).ok()?;
+        let span = spans
+            .iter()
+            .find(|span| (span.first_cell..span.first_cell.saturating_add(span.cell_count)).contains(&index))?;
+        let offset = usize::try_from(index - span.first_cell).ok()?;
+        let offset = if after { offset + 1 } else { offset };
         Some(self.caret_at(
             node,
             CaretPosition::Text {
-                text,
+                text: span.node,
                 offset,
                 downstream: !after,
             },

@@ -189,16 +189,16 @@ pub(crate) fn committed_svg_text_character_cells(
 
 /// The cells of the characters of a <text> or <tspan>'s own text nodes, as its box committed them; None for any other box,
 /// and for a text box laid along a path or not committed.
-/// The one text node a text box's own characters come from, where they all come from one.
-pub(crate) fn committed_svg_text_own_character_cells_node(
+/// Which text node each range of those cells came from.
+pub(crate) fn committed_svg_text_own_character_cells_spans(
     arena: &impl GeometryRead,
     slot: NodeSlotId,
-) -> Option<NodeSlotId> {
+) -> Option<std::sync::Arc<Vec<crate::layout::fragment_tree::SvgTextCellsSpan>>> {
     if arena.node_kind_if_live(slot) != Some(crate::layout::node_data::NodeKind::SVGTextBox) {
         return None;
     }
     arena.with_committed_fragment_link(slot, |link| {
-        link.and_then(|link| link.fragment.svg()?.text_own_character_cells_node)
+        link.and_then(|link| link.fragment.svg()?.text_own_character_cells_spans.clone())
     })
 }
 
