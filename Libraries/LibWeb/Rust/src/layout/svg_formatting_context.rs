@@ -655,8 +655,8 @@ struct SvgTextBoxContents {
     character_cells: Vec<FfiSvgTextCharacterCell>,
     /// The glyph cell of each character of the element's own text nodes, in document order.
     own_character_cells: Vec<FfiSvgTextCharacterCell>,
-    /// The text nodes those characters come from, in document order.
-    own_text_nodes: Vec<Node>,
+    /// Which text node each range of those cells came from, in document order.
+    own_cell_spans: Vec<fragment_tree::SvgTextCellsSpan>,
     /// The union of the boxes of the element's text content child elements.
     children_bounding_box: SvgCssPixelRect,
 }
@@ -2038,15 +2038,37 @@ impl<'pass> SvgFormattingContext<'pass> {
     // SVG DOM indices address UTF-16 code units before text transformation. Keep the painted glyphs and their
     // spacing, and publish the cell occupied by each source code unit of a masked or transformed run.
     // https://svgwg.org/svg2-draft/text.html#TermAddressableCharacter
+    /// Appends the cells of the characters the text nodes from `node` on render, and a span for each of those nodes:
+    /// the range of the cells that came from it, in the cells of this run.
     fn append_svg_run_dom_cells(
         &self,
         mut node: Node,
         cells: Vec<FfiSvgTextCharacterCell>,
         out: &mut Vec<FfiSvgTextCharacterCell>,
+        spans: &mut Vec<fragment_tree::SvgTextCellsSpan>,
     ) {
         let inherited_text = self.style(self.parent(node)).inherited_text();
         let is_masked = inherited_text.text_security != crate::css::css_enums::text_security::NONE;
+        // The spans index the cells of this run, which begin where the cells around it end.
+        let run_start = out.len();
+        let span = |node: Node, first_cell: usize, cell_count: usize| fragment_tree::SvgTextCellsSpan {
+            node,
+            first_cell: u32::try_from(first_cell.saturating_sub(run_start)).unwrap_or(u32::MAX),
+            cell_count: u32::try_from(cell_count).unwrap_or(u32::MAX),
+        };
         if !is_masked && inherited_text.text_transform == crate::css::css_enums::text_transform::NONE {
+            // A run's cells are one per code unit of its text, so each of its text nodes takes the cells of the code
+            // units it contributes, in turn.
+            let mut walk = node;
+            let mut first_cell = out.len();
+            while !walk.is_invalid() && node_facts::kind_is_text(self.node_kind(walk)) {
+                let cell_count = self.processed_svg_text(walk).len();
+                if cell_count > 0 {
+                    spans.push(span(walk, first_cell, cell_count));
+                    first_cell += cell_count;
+                }
+                walk = self.next_sibling(walk);
+            }
             out.extend(cells);
             return;
         }
@@ -2054,6 +2076,7 @@ impl<'pass> SvgFormattingContext<'pass> {
         while !node.is_invalid() && node_facts::kind_is_text(self.node_kind(node)) {
             let current = node;
             node = self.next_sibling(node);
+            let before = out.len();
             if is_masked {
                 let content = self.run.pass.text_content(current);
                 let Some(masked_text) = &content.svg_source_text else {
@@ -2062,14 +2085,18 @@ impl<'pass> SvgFormattingContext<'pass> {
                 let (node_cells, rest) = cells.split_at(masked_text.len());
                 append_svg_text_cells_through_edits(node_cells, content.rendered_text_edits(), out);
                 cells = rest;
-                continue;
+            } else {
+                let (node_cells, rest) = cells.split_at(self.processed_svg_text(current).len());
+                match self.svg_text_transform_edits.borrow().get(&current) {
+                    Some(edits) => append_svg_text_cells_through_edits(node_cells, edits, out),
+                    None => out.extend_from_slice(node_cells),
+                }
+                cells = rest;
             }
-            let (node_cells, rest) = cells.split_at(self.processed_svg_text(current).len());
-            match self.svg_text_transform_edits.borrow().get(&current) {
-                Some(edits) => append_svg_text_cells_through_edits(node_cells, edits, out),
-                None => out.extend_from_slice(node_cells),
+            let cell_count = out.len() - before;
+            if cell_count > 0 {
+                spans.push(span(current, before, cell_count));
             }
-            cells = rest;
         }
     }
 
@@ -2689,16 +2716,20 @@ impl<'pass> SvgFormattingContext<'pass> {
 
                 contents.glyph_cells.unite(shaped.glyph_cells);
                 let first_own_cell = contents.character_cells.len();
-                self.append_svg_run_dom_cells(child, shaped.character_cells, &mut contents.character_cells);
+                let own_cells_before = contents.own_character_cells.len();
+                let spans_before = contents.own_cell_spans.len();
+                self.append_svg_run_dom_cells(
+                    child,
+                    shaped.character_cells,
+                    &mut contents.character_cells,
+                    &mut contents.own_cell_spans,
+                );
                 contents
                     .own_character_cells
                     .extend_from_slice(&contents.character_cells[first_own_cell..]);
-                // A run shapes the text of the text node it starts at and of the ones right after it, so each of those
-                // may own some of the characters.
-                let mut run_node = child;
-                while !run_node.is_invalid() && node_facts::kind_is_text(self.node_kind(run_node)) {
-                    contents.own_text_nodes.push(run_node);
-                    run_node = self.next_sibling(run_node);
+                // The spans index the run's cells; the box's own cells come after those of its earlier runs.
+                for span in &mut contents.own_cell_spans[spans_before..] {
+                    span.first_cell += u32::try_from(own_cells_before).unwrap_or(u32::MAX);
                 }
             } else if matches!(kind, NodeKind::SVGTextBox | NodeKind::SVGTextPathBox) {
                 // <text> and <tspan> elements can contain more text elements, whose glyph cells count toward this
@@ -3070,7 +3101,7 @@ impl<'pass> SvgFormattingContext<'pass> {
             advance += shaped.advance + shift.x + trailing_shift.x;
             shift_off_path += shift.y + trailing_shift.y;
             let first_cell = character_cells.len();
-            self.append_svg_run_dom_cells(node, shaped.character_cells, &mut character_cells);
+            self.append_svg_run_dom_cells(node, shaped.character_cells, &mut character_cells, &mut Vec::new());
             let owner = self.parent(node);
             if owner == text_path_box || self.node_kind(owner) != NodeKind::SVGTextBox {
                 match runs.last_mut() {
@@ -3823,7 +3854,7 @@ impl<'pass> SvgFormattingContext<'pass> {
         let mut text_segments = None;
         let mut text_children_bounding_box = SvgCssPixelRect::default();
         let mut own_character_cells = None;
-        let mut own_character_cells_node = None;
+        let mut own_character_cells_spans = None;
         let (path, glyph_cells, character_cells) = match kind {
             NodeKind::SVGGeometryBox => (self.svg_geometry_path(graphics_box), None, None),
             NodeKind::SVGTextBox if self.text_on_path_glyphs.borrow().contains_key(&graphics_box) => {
@@ -3839,10 +3870,7 @@ impl<'pass> SvgFormattingContext<'pass> {
                 let contents = self.layout_svg_text_box_contents(run, graphics_box);
                 text_segments = contents.segments;
                 text_children_bounding_box = contents.children_bounding_box;
-                own_character_cells_node = match contents.own_text_nodes.as_slice() {
-                    [only] => Some(*only),
-                    _ => None,
-                };
+                own_character_cells_spans = Some(std::sync::Arc::new(contents.own_cell_spans));
                 own_character_cells = Some(std::sync::Arc::new(contents.own_character_cells));
                 (
                     contents.path,
@@ -3887,7 +3915,7 @@ impl<'pass> SvgFormattingContext<'pass> {
             svg.text_segments = text_segments.map(std::sync::Arc::new);
             svg.text_character_cells = character_cells;
             svg.text_own_character_cells = own_character_cells;
-            svg.text_own_character_cells_node = own_character_cells_node;
+            svg.text_own_character_cells_spans = own_character_cells_spans;
         });
         let object_bounding_box = if is_text_content_box {
             bounding_box.to_float_rect()
