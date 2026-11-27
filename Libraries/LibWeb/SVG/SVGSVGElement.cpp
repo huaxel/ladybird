@@ -101,12 +101,19 @@ Optional<SVG::SVGLengthValue> SVGSVGElement::height_attribute_value() const
     return *m_cached_height_attribute_value;
 }
 
-// A percentage, or a plain number, is no <length> the natural size can be negotiated from.
+// A percentage is no <length> the natural size can be negotiated from. A plain number is one: SVG reads it as that
+// many user units, which a pixel is here, and `width="20"` is how most svg files write their size.
 static Optional<CSS::Length> attribute_length(SVG::SVGLengthValue const& value)
 {
-    if (value.kind() != SVG::SVGLengthValue::Kind::Length)
+    switch (value.kind()) {
+    case SVG::SVGLengthValue::Kind::Number:
+        return CSS::Length::make_px(value.value());
+    case SVG::SVGLengthValue::Kind::Length:
+        return value.to_length();
+    case SVG::SVGLengthValue::Kind::Percentage:
         return {};
-    return value.to_length();
+    }
+    VERIFY_NOT_REACHED();
 }
 
 Optional<CSS::Length> SVGSVGElement::width_attribute_length() const
