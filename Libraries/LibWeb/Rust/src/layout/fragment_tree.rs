@@ -164,6 +164,9 @@ pub(crate) struct SvgPayload {
     /// The cells of the characters of a <text> or <tspan>'s own text nodes, without those of the elements inside it,
     /// which it's hit-tested by.
     pub(crate) text_own_character_cells: Option<std::sync::Arc<Vec<svg_formatting_context::FfiSvgTextCharacterCell>>>,
+    /// The one text node those cells come from, where they all do: a cell is then a code unit of it, which is what
+    /// maps a point over a character to an offset in the DOM.
+    pub(crate) text_own_character_cells_node: Option<crate::layout::node_data::NodeSlotId>,
 }
 
 pub(crate) struct CommittedSvgPath {
@@ -247,6 +250,7 @@ impl PartialEq for FcPayload {
                         left.text_own_character_cells.as_ref(),
                         right.text_own_character_cells.as_ref(),
                     )
+                    && left.text_own_character_cells_node == right.text_own_character_cells_node
             }
             _ => false,
         }
@@ -271,6 +275,7 @@ impl FcPayload {
                     && left.text_segments == right.text_segments
                     && left.text_character_cells == right.text_character_cells
                     && left.text_own_character_cells == right.text_own_character_cells
+                    && left.text_own_character_cells_node == right.text_own_character_cells_node
             }
             _ => false,
         }
@@ -286,6 +291,7 @@ impl FcPayload {
                     && svg.text_segments.is_none()
                     && svg.text_character_cells.is_none()
                     && svg.text_own_character_cells.is_none()
+                    && svg.text_own_character_cells_node.is_none()
             }
             Self::Table(_) | Self::Flex(_) | Self::Multicol(_) | Self::Math(_) => false,
         }

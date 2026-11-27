@@ -1,0 +1,4 @@
+element at the first character: text
+caret at the first character: "10,000 BCE"@0
+caret at the last character: "10,000 BCE"@9
+dragging across the text element selects "10,000 BCE"
