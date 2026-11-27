@@ -47,7 +47,9 @@ pub(crate) fn caret_position_from_point(
         HitTestItemKind::Box | HitTestItemKind::EmptyEditable | HitTestItemKind::ChromeWidget => {
             resolver.in_box(item.paintable)
         }
-        HitTestItemKind::SvgPath => Some(resolver.at_start_of(item.paintable)),
+        HitTestItemKind::SvgPath => resolver
+            .in_svg_text(item.paintable)
+            .or_else(|| Some(resolver.at_start_of(item.paintable))),
     };
     if let Some(caret) = caret.filter(|caret| caret.caret.has_position) {
         return Some(caret);
@@ -80,6 +82,64 @@ impl<A: PaintRead> PointResolver<'_, A> {
             .map(to_css_point)
     }
 
+    /// The caret position inside the characters of an SVG text box: the character the point is over, or the one it is
+    /// nearest along the inline axis of the box.
+    /// FIXME: Only text whose characters all come from one text node answers, since that is what a cell is a code unit
+    ///        of. A text element whose own text is split across text nodes still falls back to the start of its box,
+    ///        and so does a <textPath>, whose cells are not laid along its path yet.
+    fn in_svg_text(&self, node: NodeSlotId) -> Option<FfiCaretAt> {
+        let arena = self.arena;
+        let text = paintable_geometry::committed_svg_text_own_character_cells_node(arena, node)?;
+        let cells = paintable_geometry::committed_svg_text_own_character_cells(arena, node)?;
+        let point = self.point_in_descendants_space_of(node)?;
+        let (point_x, point_y) = (point.x.to_float(), point.y.to_float());
+        // The cells are the characters of one node, in order, so the code unit an offset names is the index of the cell
+        // it falls in. A point past a character's middle is after it, and one before it, before it.
+        let mut nearest: Option<(f32, usize, bool)> = None;
+        for (index, cell) in cells.iter().enumerate() {
+            let (left, right) = (cell.x, cell.x + cell.width);
+            let (top, bottom) = (cell.y, cell.y + cell.height);
+            let inside = point_x >= left && point_x < right && point_y >= top && point_y < bottom;
+            let distance = if inside {
+                0.0
+            } else {
+                let inline_gap = if point_x < left {
+                    left - point_x
+                } else if point_x >= right {
+                    point_x - right
+                } else {
+                    0.0
+                };
+                let block_gap = if point_y < top {
+                    top - point_y
+                } else if point_y >= bottom {
+                    point_y - bottom
+                } else {
+                    0.0
+                };
+                inline_gap + block_gap
+            };
+            if nearest.is_none_or(|(best, _, _)| distance < best) {
+                let after = if inside {
+                    point_x > left + cell.width / 2.0
+                } else {
+                    point_x >= right
+                };
+                nearest = Some((distance, index, after));
+            }
+        }
+        let (_, index, after) = nearest?;
+        let offset = if after { index + 1 } else { index };
+        Some(self.caret_at(
+            node,
+            CaretPosition::Text {
+                text,
+                offset,
+                downstream: !after,
+            },
+        ))
+    }
+
     fn in_lines_of(&self, root: NodeSlotId) -> Option<FfiCaretAt> {
         let arena = self.arena;
         let point = self.point_in_descendants_space_of(root)?;
@@ -92,6 +152,11 @@ impl<A: PaintRead> PointResolver<'_, A> {
     /// child the point is over or next to, or at its start.
     fn in_box(&self, node: NodeSlotId) -> Option<FfiCaretAt> {
         let arena = self.arena;
+        // A text element answers with the character the point is over before anything a box would say, whether the hit
+        // was its box or its characters.
+        if let Some(caret) = self.in_svg_text(node) {
+            return Some(caret);
+        }
         if style_queries::is_replaced_box(arena, node) {
             return self.beside_replaced_box(node);
         }
